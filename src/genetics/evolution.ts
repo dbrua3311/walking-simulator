@@ -109,6 +109,36 @@ export function rank(robots: RobotView[]): RobotView[] {
       a.id - b.id,
   );
 }
+// A protected lineage for real, settled landings; standing alone earns zero.
+export function landingSkill(r: RobotView) {
+  const steps = r.frame.gait.settledSteps ?? [];
+  return (
+    steps.filter((n) => n > 0).length +
+    0.25 * steps.reduce((sum, n) => sum + Math.min(2, n), 0) +
+    0.2 * Math.min(2, r.frame.gait.recoverySteps ?? 0)
+  );
+}
+export function landingExplorer(robots: RobotView[], config: Config) {
+  if (config.rewardModel !== "settled-curriculum-v9") return;
+  const champion = rank(robots)[0];
+  return robots
+    .filter(
+      (r) =>
+        r.id !== champion.id &&
+        r.outcome !== "jumped" &&
+        r.outcome !== "invalid" &&
+        !r.frame.gait.jumping &&
+        r.frame.gait.supportTime >= Math.min(config.duration, 4) &&
+        r.fitness >= champion.fitness - 0.65 &&
+        landingSkill(r) > landingSkill(champion),
+    )
+    .sort(
+      (a, b) =>
+        landingSkill(b) - landingSkill(a) ||
+        b.fitness - a.fitness ||
+        a.id - b.id,
+    )[0];
+}
 // Parent diversity changes selection, never the motor outputs or manual choices.
 export function behaviorKey(r: RobotView): string {
   const g = r.frame.gait;
@@ -296,7 +326,7 @@ export function planSearch(
         : mode === "recovery"
           ? [0.55, 0.25, 0.1, 0.1]
           : [1, 0, 0, 0];
-  const slots = config.population - 1;
+  const slots = config.population - (config.preserveChampion ? 1 : 0);
   const shares = fractions.map((f) => f * slots),
     counts = shares.map(Math.floor);
   const order = shares
@@ -366,6 +396,13 @@ export function planSearch(
       champion,
     )?.id;
   }
+  if (
+    config.rewardModel === "settled-curriculum-v9" &&
+    config.adaptiveSearch &&
+    config.mutation > 0
+  )
+    preservedParentId =
+      landingExplorer(robots, config)?.id ?? preservedParentId;
   const preserved = preservedParentId !== undefined && counts[0] > 0 ? 1 : 0;
   counts[0] -= preserved;
   const preserveBalance =
@@ -425,20 +462,23 @@ export function breed(
     pool = ordered.filter((r) => selected.includes(r.id));
   if (!pool.length) throw new Error("부모를 한 개체 이상 선택하세요.");
   const champion = ordered[0];
-  const children: Individual[] = [
-    {
-      id: 1,
-      genes: [...champion.genes],
-      champion: true,
-      parents: [champion.id],
-      birth: {
-        generation: sourceGeneration,
-        kind: "elite",
-        parentGenes: [...champion.genes],
-        changedGenes: [],
-      },
-    },
-  ];
+  const children: Individual[] = config.preserveChampion
+    ? [
+        {
+          id: 1,
+          genes: [...champion.genes],
+          champion: true,
+          parents: [champion.id],
+          birth: {
+            generation: sourceGeneration,
+            kind: "elite",
+            parentGenes: [...champion.genes],
+            changedGenes: [],
+          },
+        },
+      ]
+    : [];
+  const eliteCount = config.preserveChampion ? 1 : 0;
   // Each selected parent contributes in turn. A manual selection never silently
   // loses its offspring to another tournament; only the official elite is exempt.
   const plan = typeof search === "object" ? search : null;
@@ -450,7 +490,7 @@ export function breed(
       : undefined;
   if (explorer)
     children.push({
-      id: 2,
+      id: children.length + 1,
       genes: [...explorer.genes],
       champion: false,
       parents: [explorer.id],
@@ -503,7 +543,9 @@ export function breed(
               : 0),
         ).fill(kind),
       )
-    : Array<MutationKind>(config.population - 1 - immigrants).fill("small");
+    : Array<MutationKind>(config.population - eliteCount - immigrants).fill(
+        "small",
+      );
   // Spread mutation sizes across selected parents rather than assigning an
   // entire parent lineage to one search size. Normal breeding keeps its RNG path.
   if (kinds.some((kind) => kind !== "small"))
@@ -512,7 +554,7 @@ export function breed(
       [kinds[i], kinds[j]] = [kinds[j], kinds[i]];
     }
   while (children.length < config.population - immigrants) {
-    const kind = kinds[children.length - 1 - preservedCount];
+    const kind = kinds[children.length - eliteCount - preservedCount];
     const walkingStage =
       plan?.stage === "stepping" || plan?.stage === "forward";
     const baseProfile: MutationProfile = plan?.profiles[kind] ?? {
@@ -549,7 +591,8 @@ export function breed(
       rng.next() < 0.5
     )
       profile.scale = Math.max(0.001, profile.scale / 10);
-    const a = pool[(children.length - 1 - preservedCount) % pool.length],
+    const a =
+        pool[(children.length - eliteCount - preservedCount) % pool.length],
       alternatives = pool.filter(
         (r) =>
           r.id !== a.id &&

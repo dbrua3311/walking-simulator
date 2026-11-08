@@ -19,6 +19,7 @@ import {
 import { cloneConfig as currentConfig } from "../simulation/config";
 const cloneConfig = () => ({
   ...currentConfig(),
+  preserveChampion: true,
   controllerModel: "timed-rnn" as const,
   searchMethod: "adaptive" as const,
 });
@@ -108,7 +109,7 @@ describe("유전 알고리즘", () => {
     c[0].genes[0] = 99;
     expect(winner.genes[0]).not.toBe(99);
   });
-  it("선택만으로 진화하지 않고 결정 시 챔피언 하나를 보존한다", () => {
+  it("선택만으로 진화하지 않고 결정 시 챔피언 없이 다음 세대를 만든다", () => {
     const e = new Experiment({ ...cloneConfig(), population: 4, duration: 1 });
     expect(e.robots.filter((r) => r.individual.champion)).toHaveLength(0);
     finish(e);
@@ -117,8 +118,13 @@ describe("유전 알고리즘", () => {
     expect(e.generation).toBe(1);
     e.evolve();
     expect(e.generation).toBe(2);
-    expect(e.robots[0].individual.genes).toEqual(winner.genes);
-    expect(e.robots.filter((r) => r.individual.champion)).toHaveLength(1);
+    expect(e.config.preserveChampion).toBe(false);
+    expect(
+      e.robots
+        .filter((r) => r.individual.parents.length > 0)
+        .every((r) => r.individual.parents.includes(2)),
+    ).toBe(true);
+    expect(e.robots.filter((r) => r.individual.champion)).toHaveLength(0);
   });
   it("빈 부모 풀은 거부한다", () => {
     const e = new Experiment({ ...cloneConfig(), population: 2, duration: 1 });
@@ -200,7 +206,7 @@ it("진화 설정은 다음 세대 경계에만 적용한다", () => {
   e.evolve(e.autoParents());
   expect(e.robots).toHaveLength(6);
   expect(e.config.mutation).toBe(0.2);
-  expect(e.robots.filter((r) => r.individual.champion)).toHaveLength(1);
+  expect(e.robots.filter((r) => r.individual.champion)).toHaveLength(0);
 });
 
 it("기본 20대: 선택한 부모만 복사하고 모든 자식에 작은 변이를 보장한다", () => {
@@ -503,7 +509,7 @@ describe("실패·정체에 따른 탐색 확대", () => {
     restored.evolve(restored.autoParents());
     expect(restored.snapshot()).toEqual(e.snapshot());
     expect(restored.rng.state).toBe(e.rng.state);
-    expect(e.config).toEqual(config);
+    expect(e.config).toEqual({ ...config, preserveChampion: false });
     expect(e.robots.filter((r) => r.individual.immigrant)).toHaveLength(
       plan.counts.immigrant,
     );

@@ -3,6 +3,7 @@ import type { Config } from "./types";
 const number = (min: number, max: number) =>
   z.number().finite().min(min).max(max);
 export const configSchema = z.object({
+  preserveChampion: z.boolean().default(true),
   searchMethod: z.enum(["adaptive", "covariance"]).default("adaptive"),
   controllerModel: z
     .enum([
@@ -21,6 +22,7 @@ export const configSchema = z.object({
       "cycle-curriculum-v6",
       "rhythmic-curriculum-v7",
       "mobile-curriculum-v8",
+      "settled-curriculum-v9",
     ])
     .default("temporal-curriculum-v4"),
   name: z.string().trim().min(1).max(80),
@@ -95,9 +97,10 @@ export const configSchema = z.object({
   }),
 });
 export const DEFAULT_CONFIG: Config = {
+  preserveChampion: false,
   searchMethod: "covariance",
   controllerModel: "shared-direction",
-  rewardModel: "mobile-curriculum-v8",
+  rewardModel: "settled-curriculum-v9",
   name: "무작위 신경망 보행 실험",
   seed: 2026,
   population: 20,

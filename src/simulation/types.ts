@@ -19,6 +19,8 @@ export type FootState = {
   clearance: number;
 };
 export type Gait = {
+  settledSteps?: number[];
+  recoverySteps?: number;
   jointFreedom?: number;
   mobileSupportTime?: number;
   longestMobileSupport?: number;
@@ -216,8 +218,10 @@ export type RewardModel =
   | "supported-curriculum-v5"
   | "cycle-curriculum-v6"
   | "rhythmic-curriculum-v7"
-  | "mobile-curriculum-v8";
+  | "mobile-curriculum-v8"
+  | "settled-curriculum-v9";
 export type Config = {
+  preserveChampion: boolean;
   controllerModel:
     | "timed-rnn"
     | "local-feedback-rnn"
@@ -322,6 +326,8 @@ export type Snapshot = {
   previousBest: Ghost | null;
   allTimeBest: Ghost | null;
   selected: number[];
+  requestedSpeed?: number;
+  simulatedSeconds?: number;
   actualSpeed: number;
   savePending: boolean;
 };

@@ -18,22 +18,25 @@ export function breedShared(
   const pool = ordered.filter((r) => selected.includes(r.id));
   if (!pool.length) throw new Error("부모를 한 개체 이상 선택하세요.");
   const best = ordered[0],
-    children: Individual[] = [
-      {
-        id: 1,
-        genes: [...best.genes],
-        champion: true,
-        parents: [best.id],
-        birth: {
-          generation,
-          kind: "elite",
-          parentGenes: [...best.genes],
-          changedGenes: [],
-        },
-      },
-    ];
+    children: Individual[] = config.preserveChampion
+      ? [
+          {
+            id: 1,
+            genes: [...best.genes],
+            champion: true,
+            parents: [best.id],
+            birth: {
+              generation,
+              kind: "elite",
+              parentGenes: [...best.genes],
+              changedGenes: [],
+            },
+          },
+        ]
+      : [];
+  const eliteCount = children.length;
   while (children.length < config.population) {
-    const parent = pool[(children.length - 1) % pool.length],
+    const parent = pool[(children.length - eliteCount) % pool.length],
       genes = [...parent.genes],
       ranges = sharedRanges(parent.genes.length);
     let other: RobotView | undefined;

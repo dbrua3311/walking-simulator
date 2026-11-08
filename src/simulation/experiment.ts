@@ -24,6 +24,7 @@ import {
   rankDistance,
   suggestParents,
   planSearch,
+  landingExplorer,
 } from "../genetics/evolution";
 import {
   initialCurriculum,
@@ -88,7 +89,9 @@ export class Experiment {
       this.evolutionVersion =
         this.config.controllerModel === "local-periodic-rnn"
           ? "adaptive-mutation-v16"
-          : this.config.rewardModel === "mobile-curriculum-v8"
+          : ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+                this.config.rewardModel,
+              )
             ? "adaptive-mutation-v14"
             : this.config.controllerModel === "local-feedback-rnn"
               ? "adaptive-mutation-v13"
@@ -96,7 +99,9 @@ export class Experiment {
       this.selectionVersion =
         this.config.controllerModel === "local-periodic-rnn"
           ? "curriculum-diversity-v8"
-          : this.config.rewardModel === "mobile-curriculum-v8"
+          : ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+                this.config.rewardModel,
+              )
             ? "curriculum-diversity-v7"
             : "curriculum-diversity-v6";
     }
@@ -154,7 +159,9 @@ export class Experiment {
   }
   private balanceAnchor(config = this.config) {
     if (
-      config.rewardModel !== "mobile-curriculum-v8" ||
+      !["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        config.rewardModel,
+      ) ||
       (this.curriculum.stage === "balance" && !this.curriculum.pendingStage)
     )
       return;
@@ -190,7 +197,7 @@ export class Experiment {
         config,
         this.balanceSearch,
       ).map((id) => ({ id, reason: "fitness" as const }));
-    const choices = suggestParents(
+    let choices = suggestParents(
       this.robots.map((r) => r.view()),
       config.parentCount,
       this.selectionVersion !== "curriculum-diversity-v2"
@@ -201,6 +208,19 @@ export class Experiment {
       isPracticeReward(config.rewardModel),
       config.controllerModel === "local-periodic-rnn" ? 0.9 : undefined,
     );
+    const explorer = landingExplorer(
+      this.robots.map((r) => r.view()),
+      config,
+    );
+    if (
+      explorer &&
+      config.parentCount > 1 &&
+      !choices.some((c) => c.id === explorer.id)
+    )
+      choices = [
+        ...choices.slice(0, config.parentCount - 1),
+        { id: explorer.id, reason: "foot-progress" },
+      ];
     const anchor = this.balanceAnchor(config);
     if (anchor && !choices.some((c) => c.id === anchor.id))
       return [
@@ -213,8 +233,10 @@ export class Experiment {
     const plan = planSearch(
       this.robots.map((r) => r.view()),
       this.history,
-      config,
-      config.rewardModel === "mobile-curriculum-v8"
+      { ...config, preserveChampion: false },
+      ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        config.rewardModel,
+      )
         ? (this.curriculum.pendingStage ?? this.curriculum.stage)
         : this.curriculum.stage,
       Boolean(this.curriculum.pendingStage),
@@ -249,6 +271,7 @@ export class Experiment {
     const nextConfig = configSchema.parse({
       ...this.config,
       ...(settings ?? this.pendingSettings),
+      preserveChampion: false,
     });
     const shared =
       automatic && useSharedSearch(nextConfig)
@@ -287,7 +310,9 @@ export class Experiment {
     this.evolutionVersion =
       nextConfig.controllerModel === "local-periodic-rnn"
         ? "adaptive-mutation-v16"
-        : nextConfig.rewardModel === "mobile-curriculum-v8"
+        : ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+              nextConfig.rewardModel,
+            )
           ? "adaptive-mutation-v14"
           : nextConfig.controllerModel === "local-feedback-rnn"
             ? "adaptive-mutation-v13"
@@ -297,7 +322,9 @@ export class Experiment {
     this.selectionVersion =
       nextConfig.controllerModel === "local-periodic-rnn"
         ? "curriculum-diversity-v8"
-        : nextConfig.rewardModel === "mobile-curriculum-v8"
+        : ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+              nextConfig.rewardModel,
+            )
           ? "curriculum-diversity-v7"
           : isPracticeReward(nextConfig.rewardModel)
             ? "curriculum-diversity-v6"
@@ -453,7 +480,7 @@ export class Experiment {
       sharedSearch: this.sharedSearch,
       balanceSearch: this.balanceSearch,
       formatVersion: 6,
-      appVersion: "0.15.0",
+      appVersion: "0.17.0",
       engineVersion: "rapier3d-0.21.0",
       controllerVersion: controllerVersion(this.config),
       evolutionVersion: this.evolutionVersion,

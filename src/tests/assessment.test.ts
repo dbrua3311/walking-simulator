@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { WalkingAssessment, type MotionSample } from "../physics/assessment";
 import { FootCycle, walkingGate, supportReadiness } from "../physics/gait";
-import { cloneConfig } from "../simulation/config";
+import { cloneConfig as currentConfig } from "../simulation/config";
+const cloneConfig: typeof currentConfig = () => ({
+  ...currentConfig(),
+  rewardModel: "mobile-curriculum-v8" as const,
+});
 const ground: MotionSample = {
   x: 0,
   dx: 0,

@@ -1,3 +1,4 @@
+import { landingExplorer, landingSkill } from "./evolution";
 import { CovarianceSearch, type CovarianceState } from "./covariance";
 import { assemblyAngle } from "../controllers/genome";
 import {
@@ -292,20 +293,28 @@ export function sharedPlan(
       legs = [0, 1, 2, 3].filter((l) => Math.min(2, steps[l]) === min);
     target = legs[(config.seed + generation) % legs.length];
   }
-  const score = (r: RobotView) => sharedFitness(r, mode, target, config),
+  const score = (r: RobotView) =>
+      sharedFitness(r, mode, target, config) +
+      (config.rewardModel === "settled-curriculum-v9"
+        ? 0.3 * landingSkill(r)
+        : 0),
     ranked = [...pool].sort(
       (a, b) => score(b) - score(a) || b.fitness - a.fitness || a.id - b.id,
     );
   let founder = ranked[0];
   if (mode === "balance")
     founder = fallback.find((r) => meetsStage(r, "balance", config)) ?? founder;
-  const copies: RobotView[] = [ordered[0]];
+  const copies: RobotView[] = config.preserveChampion ? [ordered[0]] : [];
   for (const r of [
-    founder,
-    fallback.find((r) => meetsStage(r, "balance", config)),
+    landingExplorer(robots, config),
+    config.preserveChampion ? founder : undefined,
+    config.preserveChampion || stage !== "balance"
+      ? fallback.find((r) => meetsStage(r, "balance", config))
+      : undefined,
   ])
     if (
       r &&
+      (config.preserveChampion || r.id !== ordered[0].id) &&
       !copies.some((p) => p.id === r.id) &&
       copies.length < config.population - 1
     )
@@ -338,7 +347,12 @@ export function sharedParents(
   state: SharedSearchState | null,
 ) {
   const plan = sharedPlan(robots, config, stage, generation, state);
-  return plan.reusable ? plan.parents.map((r) => r.id) : [plan.founder.id];
+  const selected = plan.reusable
+    ? plan.parents.map((r) => r.id)
+    : [plan.founder.id];
+  return config.rewardModel === "settled-curriculum-v9"
+    ? [...new Set([...plan.copies.map((r) => r.id), ...selected])]
+    : selected;
 }
 export function breedSharedSearch(
   robots: RobotView[],
@@ -398,13 +412,14 @@ export function breedSharedSearch(
       id: i + 1,
       genes: [...p.genes],
       parents: [p.id],
-      champion: i === 0,
+      champion: config.preserveChampion && i === 0,
       birth: {
         generation,
         kind:
-          i === 0
+          config.preserveChampion && i === 0
             ? "elite"
-            : p.id === founder.id && mode !== "balance"
+            : (p.id === founder.id && mode !== "balance") ||
+                p.id === landingExplorer(robots, config)?.id
               ? "explorer"
               : "stage-anchor",
         parentGenes: [...p.genes],
@@ -491,7 +506,7 @@ export function validateSharedState(
     ids.size !== s.draws.length ||
     samples.length !== s.draws.length ||
     s.optimizer.mu > config.parentCount ||
-    s.optimizer.mu > config.population - 1 ||
+    s.optimizer.mu > config.population - (config.preserveChampion ? 1 : 0) ||
     s.strength <= 0 ||
     !Number.isFinite(s.peak) ||
     (s.mode === "balance") !== (stage === "balance") ||

@@ -27,6 +27,7 @@ import { parseCheckpoint } from "../persistence/files";
 import type { Config, RobotView } from "../simulation/types";
 const config = (population = 8): Config => ({
   ...cloneConfig(),
+  preserveChampion: true,
   controllerModel: "shared-reflex",
   parentCount: 3,
   population,

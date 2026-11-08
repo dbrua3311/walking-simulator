@@ -6,9 +6,11 @@ import type {
 } from "../simulation/types";
 const clip = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
-export const REWARD_VERSION = "mobile-curriculum-v8";
+export const REWARD_VERSION = "settled-curriculum-v9";
+export const isMobileReward = (model: Config["rewardModel"]) =>
+  model === "mobile-curriculum-v8" || model === REWARD_VERSION;
 export const isRhythmicReward = (model: Config["rewardModel"]) =>
-  model === "rhythmic-curriculum-v7" || model === REWARD_VERSION;
+  model === "rhythmic-curriculum-v7" || isMobileReward(model);
 export const isPracticeReward = (model: Config["rewardModel"]) =>
   model === "cycle-curriculum-v6" || isRhythmicReward(model);
 export const BACKWARD_PENALTY_PER_M = 0.15;
@@ -110,7 +112,7 @@ export class WalkingAssessment {
       Math.abs(s.verticalSpeed) <= e.maxVerticalSpeed &&
       !this.jump;
     if (posture && s.contacts > 0) this.uprightTime += dt;
-    if (this.config.rewardModel === REWARD_VERSION) {
+    if (isMobileReward(this.config.rewardModel)) {
       const freedom = clip(s.jointFreedom ?? 1, 0, 1);
       if (grounded)
         this.mobilityTime +=
@@ -192,14 +194,19 @@ export class WalkingAssessment {
     footProgress: number[] = [],
     weightShift: number[] = [],
     stepActivity: number[] = [],
+    settledSteps: number[] = [],
+    recoverySteps = 0,
   ): ScoreBreakdown {
+    const settledReward = this.config.rewardModel === "settled-curriculum-v9";
     const duration = this.config.duration,
       distinct = steps.filter((n) => n > 0).length / 4,
       stepQuality = steps.reduce((sum, n) => sum + Math.min(2, n), 0) / 8,
       progress = Math.tanh(this.groundedForward / 0.5),
       weights =
         this.stage === "balance"
-          ? [0.98, 0.01, 0.01, 0]
+          ? settledReward
+            ? [0.7, 0.27, 0.03, 0]
+            : [0.98, 0.01, 0.01, 0]
           : this.stage === "stepping"
             ? [0.2, 0.6, 0.1, 0.1]
             : [0.03, 0.12, 0.45, 0.4];
@@ -220,7 +227,7 @@ export class WalkingAssessment {
     const supportSignal =
       this.stage === "balance"
         ? (0.8 *
-            (this.config.rewardModel === REWARD_VERSION
+            (isMobileReward(this.config.rewardModel)
               ? this.mobilityTime
               : this.supportTime) +
             0.2 * this.balanceTime) /
@@ -241,6 +248,7 @@ export class WalkingAssessment {
         [
           "cycle-curriculum-v6",
           "rhythmic-curriculum-v7",
+          "mobile-curriculum-v8",
           REWARD_VERSION,
         ].includes(this.config.rewardModel)
           ? (0.3 *
@@ -258,6 +266,7 @@ export class WalkingAssessment {
         [
           "cycle-curriculum-v6",
           "rhythmic-curriculum-v7",
+          "mobile-curriculum-v8",
           REWARD_VERSION,
         ].includes(this.config.rewardModel)
           ? (0.04 *
@@ -270,7 +279,14 @@ export class WalkingAssessment {
               )) /
             4
           : 0,
-      stepping = weights[1] * (footPoints + shiftPoints) * sustainedSteps,
+      stepping = settledReward
+        ? weights[1] *
+          ((0.6 * settledSteps.filter((n) => n > 0).length) / 4 +
+            (0.4 * settledSteps.reduce((sum, n) => sum + Math.min(2, n), 0)) /
+              8 +
+            0.15 * Math.min(2, recoverySteps)) *
+          clip(this.supportTime / Math.min(duration, 4), 0, 1)
+        : weights[1] * (footPoints + shiftPoints) * sustainedSteps,
       forward =
         weights[2] *
         sustainedSteps *
@@ -303,7 +319,7 @@ export class WalkingAssessment {
               : 0.1
           : 0,
       penalty =
-        (this.config.rewardModel === REWARD_VERSION
+        (isMobileReward(this.config.rewardModel)
           ? 0.8 * clip(this.stopEffortTime / (duration * 0.1), 0, 1)
           : 0) +
         (0.1 * this.airTime) / duration +

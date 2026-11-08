@@ -315,6 +315,8 @@ it("체중 이동·재착지 평가를 켜도 같은 유전자의 실제 자세�
     delete b.gait.mobileSupportTime;
     delete b.gait.longestMobileSupport;
     delete b.gait.stopEffortTime;
+    delete b.gait.settledSteps;
+    delete b.gait.recoverySteps;
     expect(b).toEqual(a);
   }
   old.dispose();

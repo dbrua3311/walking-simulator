@@ -20,6 +20,7 @@ import { cloneConfig as currentConfig } from "../simulation/config";
 // the current UI default. Shared-controller search has its own test file.
 const cloneConfig = () => ({
   ...currentConfig(),
+  preserveChampion: true,
   controllerModel: "local-periodic-rnn" as const,
   parentCount: 5,
 });
@@ -116,9 +117,14 @@ it("자동 균형 탐색의 세대·부모·실제 집단 평가와 분포를 JS
   finish(e);
   const saved = parseCheckpoint(JSON.stringify(e.checkpoint()));
   expect(saved.balanceSearch?.draws).toHaveLength(
-    5 - saved.population.filter((p) => p.birth?.kind === "stage-anchor").length,
+    6 -
+      saved.population.filter((p) =>
+        ["stage-anchor", "explorer"].includes(p.birth?.kind ?? ""),
+      ).length,
   );
-  expect(saved.population[0].genes).toEqual(elite);
+  expect(
+    saved.population.some((p) => p.champion || p.birth?.kind === "elite"),
+  ).toBe(false);
   const restored = Experiment.restore(saved);
   e.evolve(e.autoParents(), undefined, true);
   restored.evolve(restored.autoParents(), undefined, true);
@@ -214,7 +220,7 @@ it("설정한 분포 변이 폭 변경이 다음 자식에 반영되고 점프 �
   e.dispose();
 });
 
-it("승급 때 실제 균형 통과 계보와 점수 우승을 함께 보존하고 첫 발 단계는 작은 변이로 시작한다", () => {
+it("승급 때 챔피언 복사 없이 실제 균형 통과 계보를 보존하고 작은 변이로 시작한다", () => {
   const cfg = { ...cloneConfig(), population: 4, parentCount: 2, duration: 1 },
     e = new Experiment(cfg);
   finish(e);
@@ -242,7 +248,11 @@ it("승급 때 실제 균형 통과 계보와 점수 우승을 함께 보존하�
   expect(plan.profiles.small.scale).toBeCloseTo(0.001, 12);
   e.evolve(e.autoParents(), undefined, true);
   expect(e.robots).toHaveLength(4);
-  expect(e.robots[0].individual.genes).toEqual(views[0].genes);
+  expect(
+    e.robots.some(
+      (r) => r.individual.champion || r.individual.birth?.kind === "elite",
+    ),
+  ).toBe(false);
   const anchor = e.robots.find(
     (r) => r.individual.birth?.kind === "stage-anchor",
   )!;

@@ -11,12 +11,20 @@ let experiment: Experiment | undefined,
   lastPublish = 0,
   lastLoop = performance.now(),
   budget = 0,
+  simulatedSeconds = 0,
   measuredTicks = 0,
   lastMeasure = performance.now();
 const send = (message: Response) => scope.postMessage(message);
 const snapshot = () => {
   if (experiment) {
-    send({ type: "snapshot", data: experiment.snapshot(actual) });
+    send({
+      type: "snapshot",
+      data: {
+        ...experiment.snapshot(actual),
+        requestedSpeed: speed,
+        simulatedSeconds,
+      },
+    });
     lastPublish = performance.now();
   }
 };
@@ -31,16 +39,29 @@ const handleCommand = (event: MessageEvent<Command>) => {
       experiment?.dispose();
       experiment = next;
       bindSave();
+      simulatedSeconds = 0;
+      measuredTicks = 0;
+      lastMeasure = performance.now();
+      actual = 0;
       budget = 0;
     } else if (command.type === "load") {
       const next = Experiment.restore(validateCheckpoint(command.data));
       experiment?.dispose();
       experiment = next;
       bindSave();
+      simulatedSeconds = 0;
+      measuredTicks = 0;
+      lastMeasure = performance.now();
+      actual = 0;
       budget = 0;
     } else if (command.type === "speed") {
-      speed = Math.max(1, Math.min(256, command.value));
+      if (!Number.isFinite(command.value))
+        throw new Error("올바른 배속을 선택하세요.");
+      speed = Math.max(0.1, Math.min(256, command.value));
       budget = 0;
+      measuredTicks = 0;
+      lastMeasure = performance.now();
+      actual = 0;
     } else if (experiment) {
       if (command.type === "settings")
         experiment.queueSettings(command.settings);
@@ -105,6 +126,7 @@ function loop() {
           experiment.step();
           budget -= experiment.config.physics.dt;
           measuredTicks++;
+          simulatedSeconds += experiment.config.physics.dt;
           if ((experiment.phase as string) === "selection") {
             // Fast compact policies can finish many generations per second.
             // Automatic boundaries follow the same UI rate limit as ticks;
@@ -122,7 +144,7 @@ function loop() {
         lastMeasure = now;
       }
       if (
-        now - lastPublish >= 100 &&
+        now - lastPublish >= (experiment.auto && speed > 1 ? 250 : 100) &&
         (experiment.phase === "running" ||
           experiment.phase === "validating" ||
           (experiment.phase === "selection" && experiment.auto))

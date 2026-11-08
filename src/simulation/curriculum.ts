@@ -48,7 +48,9 @@ export function meetsStage(
     return (
       r.elapsed + 1e-8 >= config.duration &&
       r.outcome === "timeout" &&
-      (config.rewardModel !== "mobile-curriculum-v8" ||
+      (!["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        config.rewardModel,
+      ) ||
         ((g.longestMobileSupport ?? 0) + 1e-8 >= Math.min(2, config.duration) &&
           (g.mobileSupportTime ?? 0) + 1e-8 >=
             config.duration * c.mobileSupportRatio &&
@@ -118,7 +120,7 @@ export function enterNextGeneration(
 export function stageTarget(stage: TrainingStage, config: Config): string {
   const c = config.curriculum;
   if (stage === "balance")
-    return `${config.duration}초 끝까지 넘어지지 않기 · 연속 안정 지지 ${Math.min(c.balanceSeconds, config.duration)}초${config.rewardModel === "mobile-curriculum-v8" ? ` · 가동 여유 연속 ${Math.min(2, config.duration)}초 · 합계 ${Number((config.duration * c.mobileSupportRatio).toFixed(2))}초` : ""}`;
+    return `${config.duration}초 끝까지 넘어지지 않기 · 연속 안정 지지 ${Math.min(c.balanceSeconds, config.duration)}초${["mobile-curriculum-v8", "settled-curriculum-v9"].includes(config.rewardModel) ? ` · 가동 여유 연속 ${Math.min(2, config.duration)}초 · 합계 ${Number((config.duration * c.mobileSupportRatio).toFixed(2))}초` : ""}`;
   if (stage === "stepping")
     return `${c.steppingFeet}발 · ${c.steppingSteps}걸음 · 접지 전진 ${c.steppingForward}m${c.coordinatedPromotion ? ` · ${config.duration}초 끝까지 유지 · 발마다 2걸음 · 연속 보행 1초 · 종료 때 네 발 최근 걸음` : ""}`;
   return `유효 보행 ${c.forwardSeconds}초 · ${config.target}m · 네 발 각각 2걸음${c.forwardContinuousSeconds > 0 ? ` · 연속 전진 ${Math.min(c.forwardContinuousSeconds, c.forwardSeconds)}초` : ""}${c.requireWalkingAtFinish ? " · 판정 순간도 네 발 반복 보행 중" : ""}${c.maxWalkingFlightTime < config.evaluation.maxAirTime ? " · 발 지지 유지" : ""}`;
