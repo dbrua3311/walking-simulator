@@ -37,7 +37,7 @@ export function upgradeCompletedController(
   if (d.balanceSearch) d.balanceSearch.base = extend(d.balanceSearch.base);
   for (const report of [d.verification, d.verifiedPolicy])
     if (report) report.genes = extend(report.genes);
-  d.appVersion = "0.15.0";
+  d.appVersion = "0.17.0";
   d.controllerVersion = PERIODIC_CONTROLLER_VERSION;
   d.config.controllerModel = "local-periodic-rnn";
   d.controllerTransitions = [

@@ -49,10 +49,10 @@ export function Chart({
               x2="248"
               y1={112 - f * 88}
               y2={112 - f * 88}
-              stroke="#dadfd3"
+              stroke="var(--line)"
               strokeDasharray="3 4"
             />
-            <text x="0" y={116 - f * 88} fill="#87907f" fontSize="9">
+            <text x="0" y={116 - f * 88} fill="var(--muted)" fontSize="9">
               {(lo + range * f).toFixed(range < 0.1 ? 3 : 2)}
             </text>
           </g>
@@ -62,13 +62,13 @@ export function Chart({
             <polyline
               points={points(mean)}
               fill="none"
-              stroke="#b0b9a6"
+              stroke="var(--muted)"
               strokeWidth="2"
             />
             <polyline
               points={points(best)}
               fill="none"
-              stroke="#537254"
+              stroke="var(--accent)"
               strokeWidth="2.5"
             />
             {best.map((v, i) => (
@@ -77,15 +77,15 @@ export function Chart({
                 cx={32 + (i / Math.max(1, best.length - 1)) * 216}
                 cy={112 - ((v - lo) / range) * 88}
                 r={best.length > 100 ? 0 : 2.3}
-                fill="#537254"
+                fill="var(--accent)"
               />
             ))}
           </>
         )}
-        <text x="32" y="133" fontSize="9" fill="#87907f">
+        <text x="32" y="133" fontSize="9" fill="var(--muted)">
           {rows[0]?.generation ?? 1}세대
         </text>
-        <text x="248" y="133" textAnchor="end" fontSize="9" fill="#87907f">
+        <text x="248" y="133" textAnchor="end" fontSize="9" fill="var(--muted)">
           {rows.at(-1)?.generation ?? 1}세대
         </text>
       </svg>

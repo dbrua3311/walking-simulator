@@ -48,7 +48,9 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
   } as const;
   return (
     <section className="training-panel" aria-label="단계별 보행 학습">
-      {config.rewardModel !== "mobile-curriculum-v8" && (
+      {!["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        config.rewardModel,
+      ) && (
         <p className="training-hint">
           이전 학습 기준을 유지한 실험입니다. 새 실험 적용 시 관절 가동 여유와
           반복 발 재착지를 평가합니다.
@@ -91,7 +93,9 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
         <strong>{STAGE_NAMES[c.stage]} 목표</strong>
         <span>{stageTarget(c.stage, config)}</span>
       </div>
-      {config.rewardModel === "mobile-curriculum-v8" && (
+      {["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        config.rewardModel,
+      ) && (
         <p className="training-progress" aria-label="관절 가동 여유">
           가동 여유를 유지한 지지 최고{" "}
           {Math.max(
@@ -115,9 +119,11 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
         </p>
       )}
       {c.stage === "stepping" &&
-        ["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-          config.rewardModel,
-        ) && (
+        [
+          "rhythmic-curriculum-v7",
+          "mobile-curriculum-v8",
+          "settled-curriculum-v9",
+        ].includes(config.rewardModel) && (
           <p className="training-progress">
             각 발의 최근 걸음이 이어질수록 가점합니다. 처음 두 걸음 뒤 멈추면
             반복 보상이 줄어듭니다.
@@ -173,23 +179,18 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
       >
         <strong>현재 세대 탐색 구성</strong>
         {s.generation === 1 && <p>초기 무작위 {s.robots.length}대</p>}
-        {s.generation > 1 && (
-          <p>우승 그대로 보존 {s.robots.filter((r) => r.champion).length}대</p>
-        )}
         {s.sharedSearchInfo && (
           <p aria-label="공통 보행 탐색">
-            탐색 초점: {SHARED_MODE_NAMES[s.sharedSearchInfo.mode]}. 우승은 보행
-            점수로 보존하고, 부모는 현재 연습 목표로 선발합니다. 학습한 네 발
-            움직임을 유지하며 직진을 다듬습니다. 수동 결정은 선택한 부모의
-            교차·변이를 사용합니다.
+            탐색 초점: {SHARED_MODE_NAMES[s.sharedSearchInfo.mode]}. 부모는 현재
+            연습 목표와 보행 점수로 선발합니다. 학습한 네 발 움직임을 유지하며
+            직진을 다듬습니다. 수동 결정은 선택한 부모의 교차·변이를 사용합니다.
           </p>
         )}
         {distribution && (
           <p>
-            자동 균형 학습: 우승 1대 보존 · 36개 연결의 분포에서{" "}
-            {config.population - 1}대 탐색 · 새 평가 부모를 가중 재조합합니다.
-            변이율·폭은 탐색 강도에 반영합니다. 수동 결정은 선택한 부모의 개별
-            변이를 사용합니다.
+            자동 균형 학습: 36개 연결의 분포에서 {config.population}대 평가 · 새
+            평가 부모를 가중 재조합합니다. 변이율·폭은 탐색 강도에 반영합니다.
+            수동 결정은 선택한 부모의 개별 변이를 사용합니다.
           </p>
         )}
         {mutationCounts.distribution > 0 && (
@@ -219,9 +220,8 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
                   : "기본 탐색"}
             </strong>
             <p>
-              우승 1대 보존 · 작은 {plan.counts.small} · 중간{" "}
-              {plan.counts.medium} · 큰 {plan.counts.large} · 새 무작위{" "}
-              {plan.counts.immigrant}
+              작은 {plan.counts.small} · 중간 {plan.counts.medium} · 큰{" "}
+              {plan.counts.large} · 새 무작위 {plan.counts.immigrant}
               {(plan.anchorCount ?? 0) > 0 &&
                 ` · 균형 계보 보존 ${plan.anchorCount}`}
               {plan.counts.preserved > 0 &&
@@ -318,7 +318,7 @@ export function TrainingPanel({ snapshot: s }: { snapshot: Snapshot }) {
       )}
       {s.verifiedPolicy && report?.status !== "passed" && (
         <p className="verified-memory">
-          검증 우승: {s.verifiedPolicy.generation}세대 로봇{" "}
+          검증 기록: {s.verifiedPolicy.generation}세대 로봇{" "}
           {s.verifiedPolicy.robotId} · 유전자와 3조건 결과를 저장에 보존합니다.
         </p>
       )}

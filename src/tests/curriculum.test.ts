@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { WalkingAssessment, type MotionSample } from "../physics/assessment";
-import { cloneConfig } from "../simulation/config";
+import { cloneConfig as currentConfig } from "../simulation/config";
+// Regression fixtures use the original v8 score; v9 landing rewards have their own suite.
+const cloneConfig: typeof currentConfig = () => ({
+  ...currentConfig(),
+  rewardModel: "mobile-curriculum-v8",
+});
 import {
   assessCurriculum,
   enterNextGeneration,

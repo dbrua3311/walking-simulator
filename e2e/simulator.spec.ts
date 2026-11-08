@@ -50,6 +50,9 @@ async function setup(page: Page) {
     });
   });
   await page.goto("/");
+  await page.locator(".settings-details > summary").click();
+  await page.locator(".learning-details > summary").click();
+  await page.locator(".scene-diagnostics > summary").click();
   await expect(
     page.getByRole("button", { name: "자동 학습 시작", exact: true }),
   ).toBeEnabled();
@@ -66,18 +69,18 @@ async function setup(page: Page) {
   await page.getByLabel("개체 수", { exact: true }).fill("4");
   await page.getByLabel("평가 시간 (s)", { exact: true }).fill("1");
   await page.getByRole("button", { name: "새 실험 적용" }).click();
-  await page.getByRole("button", { name: "×32", exact: true }).click();
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("32");
 }
 async function finish(page: Page) {
   await page.getByRole("button", { name: "실행 / 재개", exact: true }).click();
   await expect(page.locator(".status-pill")).toHaveText("부모 선택");
 }
-test("초기 화면·동시 출발·수동 클릭과 드래그·엘리트", async ({ page }) => {
+test("초기 화면·동시 출발·수동 클릭과 드래그·챔피언 없음", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await setup(page);
   await expect(
-    page.getByRole("heading", { name: "한 걸음씩, 더 멀리." }),
+    page.getByRole("heading", { name: "보행 시뮬레이션", level: 1 }),
   ).toBeVisible();
   await expect(page.locator(".rank-row")).toHaveCount(4);
   await finish(page);
@@ -111,7 +114,7 @@ test("초기 화면·동시 출발·수동 클릭과 드래그·엘리트", asyn
   await expect(generation(page)).toContainText("02");
   await expect(
     page.locator(".rank-row").filter({ has: page.locator("svg") }),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
   await page.screenshot({
     path: process.env.WALKING_STORAGE_ROOT + "/artifacts/desktop.png",
     fullPage: true,
@@ -127,7 +130,7 @@ test("초기 화면·동시 출발·수동 클릭과 드래그·엘리트", asyn
 });
 test("자동 학습 정지 후 같은 화면·같은 상태 유지와 재개", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: "×128", exact: true }).click();
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("128");
   await page
     .getByRole("button", { name: "자동 학습 시작", exact: true })
     .click();
@@ -137,6 +140,8 @@ test("자동 학습 정지 후 같은 화면·같은 상태 유지와 재개", a
   const latency = await stopAndMeasure(page);
   console.log("클릭→일시정지 표시:", latency, "ms");
   expect(latency).toBeLessThan(500);
+  // The 3D view renders at 15 fps; wait for the final paused snapshot to paint.
+  await page.waitForTimeout(150);
   const metrics = await page.locator(".metric-grid").innerText(),
     frame = await page
       .locator("canvas")
@@ -146,8 +151,11 @@ test("자동 학습 정지 후 같은 화면·같은 상태 유지와 재개", a
   expect(
     await page
       .locator("canvas")
-      .evaluate((e: HTMLCanvasElement) => e.toDataURL()),
-  ).toBe(frame);
+      .evaluate(
+        (e: HTMLCanvasElement, expected) => e.toDataURL() === expected,
+        frame,
+      ),
+  ).toBe(true);
   const old = parseInt(await generation(page).innerText());
   await page
     .getByRole("button", { name: "자동 학습 시작", exact: true })
@@ -193,13 +201,16 @@ test("JSON·CSV 내보내기·복원과 손상 파일 거절", async ({ page }) 
   });
   await expect(page.getByRole("alert")).toBeVisible();
   await expect(generation(page)).toContainText("01");
+  await page.locator(".export-details > summary").click();
   const csvDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "세대별 기록 CSV 내보내기" }).click();
   const exported = await csvDownload;
   const csvText = await readFile((await exported.path())!, "utf8");
   expect(csvText.split("\n")[0]).toContain("bestDistanceM");
   expect(csvText.split("\n")[0]).toContain("rewardVersion");
-  expect(csvText.split("\n")[1].split(",").at(-1)).toBe("mobile-curriculum-v8");
+  expect(csvText.split("\n")[1].split(",").at(-1)).toBe(
+    "settled-curriculum-v9",
+  );
 });
 test("좁은 화면에서도 조작할 수 있다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -227,7 +238,7 @@ test("좁은 화면에서도 조작할 수 있다", async ({ page }) => {
   });
 });
 
-test("기본 20대 동시 표시와 선택한 부모의 작은 변이 19대", async ({ page }) => {
+test("기본 20대 동시 표시와 선택한 부모의 작은 변이 20대", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.addInitScript(() => {
@@ -237,6 +248,9 @@ test("기본 20대 동시 표시와 선택한 부모의 작은 변이 19대", as
     });
   });
   await page.goto("/");
+  await page.locator(".settings-details > summary").click();
+  await page.locator(".learning-details > summary").click();
+  await page.locator(".scene-diagnostics > summary").click();
   await expect(page.locator(".population-tile")).toHaveCount(20);
   await expect(page.locator("canvas")).toHaveAttribute(
     "data-rendered-robots",
@@ -272,7 +286,7 @@ test("기본 20대 동시 표시와 선택한 부모의 작은 변이 19대", as
   }
   await page.getByLabel("평가 시간 (s)", { exact: true }).fill("1");
   await page.getByRole("button", { name: "새 실험 적용", exact: true }).click();
-  await page.getByRole("button", { name: "×32", exact: true }).click();
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("32");
   await finish(page);
   await page.waitForTimeout(250);
   const sourceDownload = page.waitForEvent("download");
@@ -295,10 +309,8 @@ test("기본 20대 동시 표시와 선택한 부모의 작은 변이 19대", as
   await page.getByRole("button", { name: "결정완료", exact: true }).click();
   await expect(generation(page)).toContainText("02");
   await expect(page.locator(".status-pill")).toHaveText("부모 선택");
-  await expect(page.locator(".population-tile.elite")).toHaveCount(1);
-  await expect(
-    page.locator(".population-tile").filter({ hasText: "부모 5 ·" }),
-  ).toHaveCount(19);
+  await expect(page.locator(".population-tile.elite")).toHaveCount(0);
+  await expect(page.locator(".population-tile .tile-score")).toHaveCount(20);
   const childDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "JSON 저장", exact: true }).click();
   const data = JSON.parse(
@@ -306,7 +318,10 @@ test("기본 20대 동시 표시와 선택한 부모의 작은 변이 19대", as
   );
   expect(data.population).toHaveLength(20);
   expect(data.evolutionVersion).toBe("adaptive-mutation-v16");
-  for (const c of data.population.slice(1)) {
+  expect(data.population.some((r: { champion: boolean }) => r.champion)).toBe(
+    false,
+  );
+  for (const c of data.population) {
     expect(c.parents).toEqual([5]);
     expect(c.birth.parentGenes).toEqual(source.population[4].genes);
     expect(c.birth.changedGenes.length).toBeGreaterThan(0);
@@ -338,7 +353,7 @@ test("평가 종료 회색 표시와 보행 점수 기반 부모 선택", async 
   await page.getByLabel("평가 시간 (s)", { exact: true }).fill("3");
   await page.getByRole("button", { name: "새 실험 적용" }).click();
   await page.getByLabel("자동 선택 부모 수", { exact: true }).fill("2");
-  await page.getByRole("button", { name: "×1", exact: true }).click();
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("1");
   // Observe before clicking: a short-lived mixed state can finish before
   // Playwright returns from its click/paint synchronization.
   await page.evaluate(() => {
@@ -376,7 +391,7 @@ test("평가 종료 회색 표시와 보행 점수 기반 부모 선택", async 
     await readFile((await (await download).path())!, "utf8"),
   );
   expect(data.selectionVersion).toBe("shared-selection-v1");
-  expect(data.rewardVersion).toBe("mobile-curriculum-v8");
+  expect(data.rewardVersion).toBe("settled-curriculum-v9");
   const eligible = data.completedResults.filter(
     (r: { outcome: string }) =>
       r.outcome !== "jumped" && r.outcome !== "invalid",
@@ -529,6 +544,9 @@ test("실패 후 변이 확대·실제 구성·토크 표시·확대 끄기", as
     });
   });
   await page.goto("/");
+  await page.locator(".settings-details > summary").click();
+  await page.locator(".learning-details > summary").click();
+  await page.locator(".scene-diagnostics > summary").click();
   await expect(
     page.getByRole("checkbox", { name: "자동 탐색 확대", exact: true }),
   ).toBeChecked();
@@ -536,21 +554,21 @@ test("실패 후 변이 확대·실제 구성·토크 표시·확대 끄기", as
   await page.getByLabel("자동 균형 탐색").selectOption("adaptive");
   await page.getByLabel("평가 시간 (s)", { exact: true }).fill("1");
   await page.getByRole("button", { name: "새 실험 적용", exact: true }).click();
-  await page.getByRole("button", { name: "×32", exact: true }).click();
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("32");
   await finish(page);
   await expect(page.locator(".search-status")).toHaveAttribute(
     "data-mode",
     "recovery",
   );
   await expect(page.locator(".search-status")).toContainText(
-    "작은 10 · 중간 5 · 큰 2 · 새 무작위 2",
+    "작은 11 · 중간 5 · 큰 2 · 새 무작위 2",
   );
   await page.getByRole("button", { name: "자동 선택", exact: true }).click();
   await page.getByRole("button", { name: "결정완료", exact: true }).click();
   await expect(generation(page)).toContainText("02");
   await expect(page.locator(".status-pill")).toHaveText("부모 선택");
   await expect(page.locator(".search-status")).toContainText(
-    "작은 변이 10대 · 중간 변이 5대 · 큰 변이 2대 · 새 무작위 2대",
+    "작은 변이 11대 · 중간 변이 5대 · 큰 변이 2대 · 새 무작위 2대",
   );
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "JSON 저장", exact: true }).click();
@@ -576,7 +594,7 @@ test("실패 후 변이 확대·실제 구성·토크 표시·확대 끄기", as
     "normal",
   );
   await expect(page.locator(".search-status")).toContainText(
-    "작은 19 · 중간 0 · 큰 0 · 새 무작위 0",
+    "작은 20 · 중간 0 · 큰 0 · 새 무작위 0",
   );
   await page.screenshot({
     path: process.env.WALKING_STORAGE_ROOT + "/artifacts/adaptive-search.png",
@@ -649,7 +667,7 @@ test("이전 보상은 그대로 복원하고 새 실험만 지속 지지·네 �
   const fresh = JSON.parse(
     await readFile((await (await freshDownload).path())!, "utf8"),
   );
-  expect(fresh.rewardVersion).toBe("mobile-curriculum-v8");
+  expect(fresh.rewardVersion).toBe("settled-curriculum-v9");
   expect(fresh.config.curriculum.coordinatedPromotion).toBe(true);
   expect(fresh.config.curriculum.maxWalkingFlightTime).toBe(0.02);
   expect(fresh.config.evaluation.contactModel).toBe("load-bearing");
@@ -774,3 +792,131 @@ for (const model of [
     expect(errors).toEqual([]);
   });
 }
+
+test("기본 화면은 간단하고 자동 학습 중 배속 명령이 Worker에 즉시 적용된다", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByLabel("신경망 구조")).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "학습 기록", exact: true }),
+  ).not.toBeVisible();
+  const robotScreen = await page.locator(".viewport3d").boundingBox();
+  expect(robotScreen!.width).toBeGreaterThan(1000);
+  expect(robotScreen!.height).toBeGreaterThanOrEqual(560);
+  await expect(page.locator(".settings-details")).not.toHaveAttribute("open");
+  await expect(page.locator(".learning-details")).not.toHaveAttribute("open");
+  await expect(page.locator(".scene-diagnostics")).not.toHaveAttribute("open");
+  await expect(
+    page.getByRole("button", { name: "자동 학습 시작", exact: true }),
+  ).toBeInViewport();
+  await page
+    .getByRole("button", { name: "자동 학습 시작", exact: true })
+    .click();
+  for (const speed of [8, 128, 1, 32]) {
+    const selector = page.getByLabel("학습 배속", { exact: true });
+    await selector.selectOption(String(speed));
+    await expect(selector).toHaveValue(String(speed));
+    await expect(page.getByTestId("requested-speed")).toHaveText(
+      "요청 ×" + speed,
+    );
+    await expect(
+      page.getByRole("button", { name: "자동 학습 정지", exact: true }),
+    ).toBeEnabled();
+  }
+  await page
+    .getByRole("button", { name: "자동 학습 정지", exact: true })
+    .click();
+  await expect(page.locator(".status-pill")).toHaveText("일시정지");
+  await page.screenshot({
+    path: process.env.WALKING_STORAGE_ROOT + "/artifacts/simple-theme.png",
+    fullPage: true,
+  });
+});
+
+test("자동 학습의 실제 물리 진행량이 저속→실시간→저속 변경을 따른다", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("0.1");
+  await expect(page.getByTestId("requested-speed")).toHaveText("요청 ×0.1");
+  await page
+    .getByRole("button", { name: "자동 학습 시작", exact: true })
+    .click();
+  const measure = async (speed: string) => {
+    await page.getByLabel("학습 배속", { exact: true }).selectOption(speed);
+    await expect(page.getByTestId("requested-speed")).toHaveText(
+      "요청 ×" + speed,
+    );
+    const read = async () =>
+      Number(
+        await page
+          .getByTestId("actual-speed")
+          .getAttribute("data-simulated-seconds"),
+      );
+    const before = await read(),
+      start = Date.now();
+    await page.waitForTimeout(4000);
+    const rate = ((await read()) - before) / ((Date.now() - start) / 1000);
+    await expect(
+      page.getByRole("button", { name: "자동 학습 정지", exact: true }),
+    ).toBeEnabled();
+    return rate;
+  };
+  const slow = await measure("0.1"),
+    fast = await measure("1"),
+    slower = await measure("0.1");
+  console.log(
+    "Actual simulation/wall second:",
+    JSON.stringify({ slow, fast, slower }),
+  );
+  expect(slow).toBeGreaterThan(0.05);
+  expect(slow).toBeLessThan(0.16);
+  expect(fast).toBeGreaterThan(slow * 1.5);
+  expect(slower).toBeLessThan(fast * 0.7);
+  expect(slower).toBeLessThan(0.16);
+  await page
+    .getByRole("button", { name: "자동 학습 정지", exact: true })
+    .click();
+});
+
+test("로봇 칸은 실시간 점수를 표시하고 챔피언 강조를 사용하지 않는다", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(window, "showSaveFilePicker", {
+      value: undefined,
+      configurable: true,
+    }),
+  );
+  await page.goto("/");
+  await expect(page.getByTestId("robot-score-1")).toHaveText("점수 0.0");
+  await expect(page.locator(".population-tile.elite")).toHaveCount(0);
+  await expect(page.getByText("금색 챔피언", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .locator(".population-tile")
+      .filter({ hasText: /부모|유전자 보존|무작위 신경망/ }),
+  ).toHaveCount(0);
+  await page.getByLabel("학습 배속", { exact: true }).selectOption("1");
+  await page.getByRole("button", { name: "실행 / 재개", exact: true }).click();
+  await expect
+    .poll(async () => page.getByTestId("robot-score-1").innerText())
+    .not.toBe("점수 0.0");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "JSON 저장", exact: true }).click();
+  const saved = JSON.parse(
+    await readFile((await (await download).path())!, "utf8"),
+  );
+  await expect(page.locator(".status-pill")).toHaveText("부모 선택");
+  expect(saved.config.preserveChampion).toBe(false);
+  expect(saved.completedResults[0].fitness * 1000).toBeCloseTo(
+    Number(
+      (await page.getByTestId("robot-score-1").innerText()).replace(
+        "점수 ",
+        "",
+      ),
+    ),
+    0,
+  );
+});

@@ -370,10 +370,7 @@ export function Scene({
     grid.position.y = 0.005;
     scene.add(grid);
     const models = snapshot.robots.map((robot, i) => {
-      const m = createRobot(
-        snapshot.config,
-        robot.champion ? "#ddb96f" : palette[i % palette.length],
-      );
+      const m = createRobot(snapshot.config, palette[i % palette.length]);
       m.model.userData.robotId = robot.id;
       scene.add(m.model);
       return m;
@@ -548,7 +545,10 @@ export function Scene({
     );
     function animate(now: number) {
       frameId = requestAnimationFrame(animate);
-      if (now - lastRender < 66) return;
+      const fastLearning =
+        current.current.snapshot.auto &&
+        (current.current.snapshot.requestedSpeed ?? 1) > 1;
+      if (now - lastRender < (fastLearning ? 200 : 66)) return;
       lastRender = now;
       const { snapshot: s, ghost: g, zoom: z } = current.current,
         overview = modeRef.current === "all",
@@ -598,9 +598,7 @@ export function Scene({
         }
         m.model.visible = overview || i === index;
         m.model.position.z = 0;
-        m.shell.color.set(
-          s.robots[i].champion ? "#ddb96f" : palette[i % palette.length],
-        );
+        m.shell.color.set(palette[i % palette.length]);
         m.update(s.robots[i].frame);
         selectionOutlines[i].visible =
           !overview && m.model.visible && s.selected.includes(s.robots[i].id);
@@ -717,7 +715,6 @@ export function Scene({
             {snapshot.robots.map((r) => (
               <option key={r.id} value={r.id}>
                 {String(r.id).padStart(2, "0")}
-                {r.champion ? " ★" : ""}
               </option>
             ))}
           </select>
@@ -749,32 +746,27 @@ export function Scene({
                 className={
                   "population-tile " +
                   (snapshot.selected.includes(r.id) ? "chosen " : "") +
-                  (r.champion ? "elite " : "") +
                   (r.outcome !== "active" ? "ended" : "")
                 }
-                title={`${lineage(r)} · ${r.outcome === "active" ? "생존" : "종료"} ${r.elapsed.toFixed(3)}s`}
+                title={`로봇 ${r.id} · ${(r.fitness * 1000).toFixed(1)}점`}
               >
                 <div className="tile-heading">
-                  <strong>
-                    {r.champion ? "★ " : ""}
-                    {String(r.id).padStart(2, "0")}
-                  </strong>
+                  <strong>{String(r.id).padStart(2, "0")}</strong>
                   <span>
                     {r.outcome === "active" ? "" : "종료 "}
                     {r.elapsed.toFixed(3)}s
                   </span>
                 </div>
                 <footer className="tile-footer">
-                  <small>
-                    {!r.parents.length
-                      ? r.immigrant
-                        ? "새 무작위 탐색"
-                        : "무작위 신경망"
-                      : r.champion
-                        ? "우승 유전자 보존"
-                        : `부모 ${r.parents.join("+")} · ${r.birth ? r.birth.changedGenes.length + "개 변형" : "이전 기록"}`}
+                  <small
+                    className="tile-score"
+                    data-testid={`robot-score-${r.id}`}
+                  >
+                    점수 {(r.fitness * 1000).toFixed(1)}
                   </small>
                   <small className="tile-performance">
+                    {r.frame.gait.settledSteps &&
+                      `안정 착지 ${r.frame.gait.settledSteps.reduce((a, b) => a + b, 0)}회 · `}
                     {r.outcome === "jumped"
                       ? "점프 종료"
                       : r.outcome === "fallen"
@@ -833,50 +825,53 @@ export function Scene({
           ? `${snapshot.robots.length}대 동시 평가 · 회색은 평가 종료 · 접지·발 옮김·전진 점수로 부모 선택`
           : `로봇 ${robot.id} · ${lineage(robot)} · 고스트는 상세 화면에서 비교`}
       </div>
-      <GenomeInspector robot={robot} />
-      <div className="foot-phases">
-        {feet.map((f, i) => (
-          <div key={i} className={f.contact ? "stance" : "swing"}>
-            <span>{["앞 왼발", "앞 오른발", "뒤 왼발", "뒤 오른발"][i]}</span>
-            <b>
-              {f.contact
-                ? "지면 지지"
-                : f.clearance > 0.02
-                  ? "발 들어 이동"
-                  : "접지 대기"}
-            </b>
-            <small>
-              {(f.clearance * 100).toFixed(1)}cm · {robot.frame.gait.steps[i]}
-              걸음
-            </small>
-          </div>
-        ))}
-      </div>
-      <div className="gait-readout reward-readout">
-        <span>
-          접지 전진 <b>{robot.frame.gait.groundedForward.toFixed(3)}m</b>
-        </span>
-        <span>
-          체공 <b>{robot.frame.gait.airTime.toFixed(3)}s</b>
-        </span>
-        <span>
-          보행 점수 <b>{(robot.fitness * 1000).toFixed(1)}</b>
-        </span>
-      </div>
-      <div className="gait-readout">
-        <span>
-          발로 지지한 시간 <b>{robot.frame.gait.supportTime.toFixed(2)}s</b>
-        </span>
-        <span>
-          인정 거리 <b>{robot.frame.distance.toFixed(3)}m</b>
-        </span>
-        <span>
-          전체 이동 <b>{robot.frame.gait.rawDistance.toFixed(3)}m</b>
-        </span>
-        <span>
-          접지 미끄러짐 <b>{robot.frame.gait.slip.toFixed(2)}m/s</b>
-        </span>
-      </div>
+      <details className="scene-diagnostics">
+        <summary>로봇 상세 수치</summary>
+        <GenomeInspector robot={robot} />
+        <div className="foot-phases">
+          {feet.map((f, i) => (
+            <div key={i} className={f.contact ? "stance" : "swing"}>
+              <span>{["앞 왼발", "앞 오른발", "뒤 왼발", "뒤 오른발"][i]}</span>
+              <b>
+                {f.contact
+                  ? "지면 지지"
+                  : f.clearance > 0.02
+                    ? "발 들어 이동"
+                    : "접지 대기"}
+              </b>
+              <small>
+                {(f.clearance * 100).toFixed(1)}cm · {robot.frame.gait.steps[i]}
+                걸음
+              </small>
+            </div>
+          ))}
+        </div>
+        <div className="gait-readout reward-readout">
+          <span>
+            접지 전진 <b>{robot.frame.gait.groundedForward.toFixed(3)}m</b>
+          </span>
+          <span>
+            체공 <b>{robot.frame.gait.airTime.toFixed(3)}s</b>
+          </span>
+          <span>
+            보행 점수 <b>{(robot.fitness * 1000).toFixed(1)}</b>
+          </span>
+        </div>
+        <div className="gait-readout">
+          <span>
+            발로 지지한 시간 <b>{robot.frame.gait.supportTime.toFixed(2)}s</b>
+          </span>
+          <span>
+            인정 거리 <b>{robot.frame.distance.toFixed(3)}m</b>
+          </span>
+          <span>
+            전체 이동 <b>{robot.frame.gait.rawDistance.toFixed(3)}m</b>
+          </span>
+          <span>
+            접지 미끄러짐 <b>{robot.frame.gait.slip.toFixed(2)}m/s</b>
+          </span>
+        </div>
+      </details>
     </div>
   );
 }

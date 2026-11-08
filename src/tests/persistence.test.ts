@@ -192,7 +192,7 @@ it("넘어짐 반복으로 새 무작위 개체가 생긴 세대도 v6 파일로
   }
   const saved = parseCheckpoint(JSON.stringify(e.checkpoint()));
   expect(saved.formatVersion).toBe(6);
-  expect(saved.rewardVersion).toBe("mobile-curriculum-v8");
+  expect(saved.rewardVersion).toBe("settled-curriculum-v9");
   expect(saved.population.some((r) => r.immigrant)).toBe(true);
   e.dispose();
 });
@@ -362,7 +362,7 @@ it("새 재착지 보상·체중 이동 지표와 진화 버전은 실제 평가
   e.start(false);
   while (e.phase === "running") e.step();
   const saved = parseCheckpoint(JSON.stringify(e.checkpoint()));
-  expect(saved.rewardVersion).toBe("mobile-curriculum-v8");
+  expect(saved.rewardVersion).toBe("settled-curriculum-v9");
   expect(saved.evolutionVersion).toBe("adaptive-mutation-v16");
   expect(
     saved.completedResults.every(
@@ -399,7 +399,7 @@ it("반복 보상은 세대별 기준을 명시하며 이전 v6를 새 점수로
   e.start(false);
   while (e.phase === "running") e.step();
   const saved = e.checkpoint();
-  expect(saved.history[0].rewardVersion).toBe("mobile-curriculum-v8");
+  expect(saved.history[0].rewardVersion).toBe("settled-curriculum-v9");
   const missing = structuredClone(saved);
   delete missing.history[0].rewardVersion;
   expect(() => validateCheckpoint(missing)).toThrow("보상 버전");
@@ -412,7 +412,7 @@ it("반복 보상은 세대별 기준을 명시하며 이전 v6를 새 점수로
   ];
   const rows = csv(mixed, "mobile-curriculum-v8").split("\n");
   expect(rows[1].endsWith("cycle-curriculum-v6")).toBe(true);
-  expect(rows[2].endsWith("mobile-curriculum-v8")).toBe(true);
+  expect(rows[2].endsWith("settled-curriculum-v9")).toBe(true);
   e.dispose();
   const legacy = new Experiment({
     ...cloneConfig(),
@@ -486,6 +486,8 @@ it("하중 접촉 기준은 새 버전으로 저장하고 이전 앱 버전으�
   expect(
     parseCheckpoint(JSON.stringify(saved)).config.evaluation.contactModel,
   ).toBe("load-bearing");
+  saved.rewardVersion = "mobile-curriculum-v8";
+  saved.config.rewardModel = "mobile-curriculum-v8";
   saved.appVersion = "0.14.0";
   expect(() => validateCheckpoint(saved)).toThrow("발 지지 기준");
   e.dispose();

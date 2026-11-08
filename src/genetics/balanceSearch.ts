@@ -1,7 +1,7 @@
 import { isSharedModel } from "../controllers/shared";
 import { meetsStage } from "../simulation/curriculum";
 import { CovarianceSearch, type CovarianceState } from "./covariance";
-import { rank, type Random, RANGES } from "./evolution";
+import { landingExplorer, rank, type Random, RANGES } from "./evolution";
 import {
   assemblyAngle,
   OUTPUT_OFFSET,
@@ -64,10 +64,20 @@ function qualifyingAnchor(robots: RobotView[], config: Config) {
     qualified = ordered.find((r) => meetsStage(r, "balance", config));
   return qualified?.id !== ordered[0].id ? qualified : undefined;
 }
+function landingAnchor(robots: RobotView[], config: Config) {
+  if (config.population < 4) return;
+  const candidate = landingExplorer(robots, config);
+  return candidate?.id !== qualifyingAnchor(robots, config)?.id
+    ? candidate
+    : undefined;
+}
 const parentMu = (robots: RobotView[], config: Config) =>
   Math.min(
     config.parentCount,
-    config.population - 1 - (qualifyingAnchor(robots, config) ? 1 : 0),
+    config.population -
+      (config.preserveChampion ? 1 : 0) -
+      (qualifyingAnchor(robots, config) ? 1 : 0) -
+      (landingAnchor(robots, config) ? 1 : 0),
   );
 export function covarianceParents(
   robots: RobotView[],
@@ -141,25 +151,27 @@ export function breedBalance(
     weight: reusable ? optimizer.weights[i] : 1,
   }));
   const center = decodeBalance(base, optimizer.mean);
-  const children: Individual[] = [
-      {
-        id: 1,
-        genes: [...best.genes],
-        champion: true,
-        parents: [best.id],
-        birth: {
-          generation,
-          kind: "elite",
-          parentGenes: [...best.genes],
-          changedGenes: [],
-        },
-      },
-    ],
+  const children: Individual[] = config.preserveChampion
+      ? [
+          {
+            id: 1,
+            genes: [...best.genes],
+            champion: true,
+            parents: [best.id],
+            birth: {
+              generation,
+              kind: "elite",
+              parentGenes: [...best.genes],
+              changedGenes: [],
+            },
+          },
+        ]
+      : [],
     next: [number, number[]][] = [];
   const anchor = qualifyingAnchor(robots, config);
   if (anchor)
     children.push({
-      id: 2,
+      id: children.length + 1,
       genes: [...anchor.genes],
       champion: false,
       parents: [anchor.id],
@@ -167,6 +179,20 @@ export function breedBalance(
         generation,
         kind: "stage-anchor",
         parentGenes: [...anchor.genes],
+        changedGenes: [],
+      },
+    });
+  const explorer = landingAnchor(robots, config);
+  if (explorer)
+    children.push({
+      id: children.length + 1,
+      genes: [...explorer.genes],
+      champion: false,
+      parents: [explorer.id],
+      birth: {
+        generation,
+        kind: "explorer",
+        parentGenes: [...explorer.genes],
         changedGenes: [],
       },
     });
@@ -252,16 +278,26 @@ export function validateBalanceState(
       Math.min(
         config.parentCount,
         config.population -
-          1 -
+          (config.preserveChampion ? 1 : 0) -
           (s.version === "balance-covariance-v2"
-            ? population.filter((p) => p.birth?.kind === "stage-anchor").length
+            ? population.filter(
+                (p) =>
+                  p.birth?.kind === "stage-anchor" ||
+                  (config.rewardModel === "settled-curriculum-v9" &&
+                    p.birth?.kind === "explorer"),
+              ).length
             : 0),
       ) ||
     s.draws.length !==
       config.population -
-        1 -
+        (config.preserveChampion ? 1 : 0) -
         (s.version === "balance-covariance-v2"
-          ? population.filter((p) => p.birth?.kind === "stage-anchor").length
+          ? population.filter(
+              (p) =>
+                p.birth?.kind === "stage-anchor" ||
+                (config.rewardModel === "settled-curriculum-v9" &&
+                  p.birth?.kind === "explorer"),
+            ).length
           : 0) ||
     new Set(s.draws.map(([id]) => id)).size !== s.draws.length
   )

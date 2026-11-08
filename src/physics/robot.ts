@@ -1,3 +1,4 @@
+import { LandingAssessment } from "./landing";
 import { DIRECTION_SHARED_GENE_COUNT } from "../controllers/shared";
 import { RAPIER } from "./engine";
 import { NeuralController } from "../controllers/neural";
@@ -65,6 +66,8 @@ export class Robot {
   maxForwardX = 0;
   validTicks = 0;
   limbTicks = 0;
+  readonly landings = new LandingAssessment();
+  private previousTilt = 0;
   cycles = Array.from({ length: 4 }, () => new FootCycle());
   private readonly weightShift = [0, 0, 0, 0];
   private readonly shiftRun = [0, 0, 0, 0];
@@ -377,14 +380,18 @@ export class Robot {
         this.tick * this.config.physics.dt,
         this.outcome,
         this.cycles.map((c) =>
-          ["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-            this.config.rewardModel,
-          )
+          [
+            "rhythmic-curriculum-v7",
+            "mobile-curriculum-v8",
+            "settled-curriculum-v9",
+          ].includes(this.config.rewardModel)
             ? c.trainingProgress(this.config.duration)
             : c.completedProgress,
         ),
         this.weightShift,
         this.cycles.map((c) => c.stepActivity / this.config.duration),
+        this.landings.settledSteps,
+        this.landings.recoverySteps,
       )
     );
   }
@@ -561,7 +568,11 @@ export class Robot {
     let jointFreedom = 0,
       freeJoints = 0,
       stopEffort = 0;
-    if (this.config.rewardModel === "mobile-curriculum-v8")
+    if (
+      ["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        this.config.rewardModel,
+      )
+    )
       this.joints.forEach((joint, i) => {
         const [lo, hi] = JOINT_LIMITS[i],
           range = hi - lo,
@@ -601,6 +612,7 @@ export class Robot {
         "cycle-curriculum-v6",
         "rhythmic-curriculum-v7",
         "mobile-curriculum-v8",
+        "settled-curriculum-v9",
       ].includes(this.config.rewardModel)
     ) {
       const center = { x: 0, y: 0, z: 0 };
@@ -626,9 +638,11 @@ export class Robot {
         this.shiftRun[leg] = readiness > 0 ? this.shiftRun[leg] + p.dt : 0;
         if (this.shiftRun[leg] + 1e-9 >= 0.15) {
           if (
-            ["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-              this.config.rewardModel,
-            )
+            [
+              "rhythmic-curriculum-v7",
+              "mobile-curriculum-v8",
+              "settled-curriculum-v9",
+            ].includes(this.config.rewardModel)
           ) {
             this.shiftTime[leg] += readiness * p.dt;
             this.weightShift[leg] = Math.min(1, this.shiftTime[leg] / 2);
@@ -648,6 +662,18 @@ export class Robot {
         quality.grounded,
       ),
     );
+    if (this.config.rewardModel === "settled-curriculum-v9")
+      this.landings.observe({
+        dt: p.dt,
+        steps: this.cycles.map((c) => c.steps),
+        contacts: this.footStates.map((f) => f.contact),
+        stable: quality.grounded,
+        eligible: quality.stepEligible,
+        tilt,
+        tiltSpeed: (tilt - this.previousTilt) / p.dt,
+        x: position.x,
+      });
+    this.previousTilt = tilt;
     const walking =
       quality.grounded &&
       walkingGate({
@@ -676,23 +702,34 @@ export class Robot {
     }
     this.assessment.observeWalking(walking, velocity.x);
     this.gait = {
+      ...(this.config.rewardModel === "settled-curriculum-v9"
+        ? {
+            settledSteps: [...this.landings.settledSteps],
+            recoverySteps: this.landings.recoverySteps,
+          }
+        : {}),
       ...([
         "cycle-curriculum-v6",
         "rhythmic-curriculum-v7",
         "mobile-curriculum-v8",
+        "settled-curriculum-v9",
       ].includes(this.config.rewardModel)
         ? {
             footProgress: this.cycles.map((c) =>
-              ["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-                this.config.rewardModel,
-              )
+              [
+                "rhythmic-curriculum-v7",
+                "mobile-curriculum-v8",
+                "settled-curriculum-v9",
+              ].includes(this.config.rewardModel)
                 ? c.trainingProgress(this.config.duration)
                 : c.completedProgress,
             ),
             weightShift: [...this.weightShift],
-            ...(["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-              this.config.rewardModel,
-            )
+            ...([
+              "rhythmic-curriculum-v7",
+              "mobile-curriculum-v8",
+              "settled-curriculum-v9",
+            ].includes(this.config.rewardModel)
               ? {
                   stepActivity: this.cycles.map(
                     (c) => c.stepActivity / this.config.duration,
@@ -701,7 +738,9 @@ export class Robot {
               : {}),
           }
         : {}),
-      ...(this.config.rewardModel === "mobile-curriculum-v8"
+      ...(["mobile-curriculum-v8", "settled-curriculum-v9"].includes(
+        this.config.rewardModel,
+      )
         ? {
             jointFreedom,
             mobileSupportTime: this.assessment.mobileSupportTime,
