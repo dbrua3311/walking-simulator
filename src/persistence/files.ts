@@ -68,6 +68,8 @@ const frame = z
       )
       .length(4),
     gait: z.object({
+      settledSteps: z.array(tick).length(4).optional(),
+      recoverySteps: tick.max(2).optional(),
       jointFreedom: finite.min(0).max(1).optional(),
       mobileSupportTime: positive.optional(),
       longestMobileSupport: positive.optional(),
@@ -100,6 +102,10 @@ const frame = z
   })
   .refine(
     (f) =>
+      (f.gait.settledSteps?.every((n, leg) => n <= f.gait.steps[leg]) ??
+        true) &&
+      (f.gait.recoverySteps ?? 0) <=
+        (f.gait.settledSteps?.reduce((a, b) => a + b, 0) ?? 0) &&
       (f.gait.longestMobileSupport ?? 0) <=
         (f.gait.mobileSupportTime ?? 0) + 1e-8 &&
       (f.gait.mobileSupportTime ?? 0) <= f.gait.supportTime + 1e-8 &&
@@ -164,7 +170,7 @@ const individual = z.object({
           }),
         )
         .min(1)
-        .max(59)
+        .max(60)
         .optional(),
       parentGenes: genes,
       changedGenes: z
@@ -273,6 +279,7 @@ const stat = z.object({
       "cycle-curriculum-v6",
       "rhythmic-curriculum-v7",
       "mobile-curriculum-v8",
+      "settled-curriculum-v9",
     ])
     .optional(),
   stage,
@@ -303,9 +310,9 @@ const searchState = z.object({
   base: genes,
   askedGeneration: tick.min(2),
   draws: z
-    .array(z.tuple([tick.min(2).max(60), vector36]))
+    .array(z.tuple([tick.min(1).max(60), vector36]))
     .min(1)
-    .max(59),
+    .max(60),
   optimizer: z.object({
     mean: vector36,
     sigma: finite.gt(0).max(100),
@@ -313,7 +320,7 @@ const searchState = z.object({
     ps: vector36,
     pc: vector36,
     generation: tick,
-    mu: tick.min(1).max(59),
+    mu: tick.min(1).max(60),
     Q: matrix36,
     D: z.array(finite.gt(0)).length(36),
   }),
@@ -333,9 +340,9 @@ const sharedState = z.object({
   stagnation: tick,
   askedGeneration: tick.min(2),
   draws: z
-    .array(z.tuple([tick.min(2).max(60), sharedVector]))
+    .array(z.tuple([tick.min(1).max(60), sharedVector]))
     .min(1)
-    .max(59),
+    .max(60),
   optimizer: z.object({
     mean: sharedVector,
     sigma: finite.gt(0).max(100),
@@ -343,7 +350,7 @@ const sharedState = z.object({
     ps: sharedVector,
     pc: sharedVector,
     generation: tick,
-    mu: tick.min(1).max(59),
+    mu: tick.min(1).max(60),
     Q: z.array(sharedVector).min(1).max(38),
     D: z.array(finite.gt(0)).min(1).max(38),
   }),
@@ -381,6 +388,8 @@ const schema = z.object({
     "0.13.0",
     "0.14.0",
     "0.15.0",
+    "0.16.0",
+    "0.17.0",
   ]),
   engineVersion: z.literal("rapier3d-0.21.0"),
   controllerVersion: z.enum([
@@ -417,6 +426,7 @@ const schema = z.object({
     "cycle-curriculum-v6",
     "rhythmic-curriculum-v7",
     "mobile-curriculum-v8",
+    "settled-curriculum-v9",
   ]),
   selectionVersion: z.enum([
     "curriculum-diversity-v2",
@@ -533,6 +543,8 @@ export function validateCheckpoint(data: unknown): Checkpoint {
   const d = parsed.data;
   if (
     d.rewardVersion !== d.config.rewardModel ||
+    (d.rewardVersion === "settled-curriculum-v9" &&
+      !["0.16.0", "0.17.0"].includes(d.appVersion)) ||
     (d.rewardVersion === "supported-curriculum-v5" &&
       ![
         "0.9.0",
@@ -543,6 +555,8 @@ export function validateCheckpoint(data: unknown): Checkpoint {
         "0.13.0",
         "0.14.0",
         "0.15.0",
+        "0.16.0",
+        "0.17.0",
       ].includes(d.appVersion)) ||
     (d.rewardVersion === "cycle-curriculum-v6" &&
       ![
@@ -553,18 +567,28 @@ export function validateCheckpoint(data: unknown): Checkpoint {
         "0.13.0",
         "0.14.0",
         "0.15.0",
+        "0.16.0",
+        "0.17.0",
       ].includes(d.appVersion)) ||
     (d.rewardVersion === "rhythmic-curriculum-v7" &&
-      !["0.11.0", "0.12.0", "0.13.0", "0.14.0", "0.15.0"].includes(
-        d.appVersion,
-      )) ||
+      ![
+        "0.11.0",
+        "0.12.0",
+        "0.13.0",
+        "0.14.0",
+        "0.15.0",
+        "0.16.0",
+        "0.17.0",
+      ].includes(d.appVersion)) ||
     (d.rewardVersion === "mobile-curriculum-v8" &&
-      !["0.12.0", "0.13.0", "0.14.0", "0.15.0"].includes(d.appVersion))
+      !["0.12.0", "0.13.0", "0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(
+        d.appVersion,
+      ))
   )
     throw new Error("보상 버전과 실험 설정이 일치하지 않습니다.");
   if (
     d.config.evaluation.contactModel === "load-bearing" &&
-    d.appVersion !== "0.15.0"
+    !["0.15.0", "0.16.0", "0.17.0"].includes(d.appVersion)
   )
     throw new Error(
       "실제 하중으로 평가한 발 지지 기준은 앱0.15.0 저장이 필요합니다.",
@@ -572,9 +596,11 @@ export function validateCheckpoint(data: unknown): Checkpoint {
   const lastReward = d.history.at(-1)?.rewardVersion;
   if (
     (lastReward && lastReward !== d.rewardVersion) ||
-    (["rhythmic-curriculum-v7", "mobile-curriculum-v8"].includes(
-      d.rewardVersion,
-    ) &&
+    ([
+      "rhythmic-curriculum-v7",
+      "mobile-curriculum-v8",
+      "settled-curriculum-v9",
+    ].includes(d.rewardVersion) &&
       d.history.some((h) => !h.rewardVersion))
   )
     throw new Error("세대별 보상 버전 기록이 일치하지 않습니다.");
@@ -592,7 +618,9 @@ export function validateCheckpoint(data: unknown): Checkpoint {
   if (
     d.controllerVersion !== controllerVersion(d.config) ||
     (d.config.controllerModel === "local-periodic-rnn" &&
-      !["0.13.0", "0.14.0", "0.15.0"].includes(d.appVersion)) ||
+      !["0.13.0", "0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(
+        d.appVersion,
+      )) ||
     geneRecords.some(
       (r) =>
         r.genes.length !== expectedCount ||
@@ -601,12 +629,14 @@ export function validateCheckpoint(data: unknown): Checkpoint {
     (d.verification && d.verification.genes.length !== expectedCount) ||
     (d.verifiedPolicy && d.verifiedPolicy.genes.length !== expectedCount) ||
     (d.config.controllerModel !== "timed-rnn" &&
-      !["0.12.0", "0.13.0", "0.14.0", "0.15.0"].includes(d.appVersion))
+      !["0.12.0", "0.13.0", "0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(
+        d.appVersion,
+      ))
   )
     throw new Error("제어기 버전과 유전자 구조가 일치하지 않습니다.");
   if (isSharedModel(d.config.controllerModel)) {
     if (
-      !["0.14.0", "0.15.0"].includes(d.appVersion) ||
+      !["0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(d.appVersion) ||
       d.selectionVersion !== "shared-selection-v1" ||
       ![
         "shared-mutation-v1",
@@ -645,10 +675,14 @@ export function validateCheckpoint(data: unknown): Checkpoint {
     throw new Error("공통 분포 탐색 상태가 없습니다.");
   if (d.balanceSearch) {
     if (
-      !["0.12.0", "0.13.0", "0.14.0", "0.15.0"].includes(d.appVersion) ||
+      !["0.12.0", "0.13.0", "0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(
+        d.appVersion,
+      ) ||
       d.evolutionVersion !== d.balanceSearch.version ||
       (d.balanceSearch.version === "balance-covariance-v2" &&
-        !["0.13.0", "0.14.0", "0.15.0"].includes(d.appVersion)) ||
+        !["0.13.0", "0.14.0", "0.15.0", "0.16.0", "0.17.0"].includes(
+          d.appVersion,
+        )) ||
       !useCovariance(d.config, d.curriculum.stage)
     )
       throw new Error("분포 탐색 버전이 일치하지 않습니다.");
@@ -677,7 +711,7 @@ export function validateCheckpoint(data: unknown): Checkpoint {
     throw new Error("개체 수 또는 ID 참조가 올바르지 않습니다.");
   if (
     d.population.filter((r) => r.champion).length !==
-    (d.generation === 1 ? 0 : 1)
+    (d.generation === 1 || !d.config.preserveChampion ? 0 : 1)
   )
     throw new Error("챔피언 정보가 올바르지 않습니다.");
   if (

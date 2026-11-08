@@ -93,7 +93,7 @@ export class CovarianceSearch {
       mean.length > 64 ||
       !Number.isInteger(mu) ||
       mu < 1 ||
-      mu > 59
+      mu > 60
     )
       throw new Error("Invalid covariance dimensions");
     this.mean = [...mean];
