@@ -1,0 +1,71 @@
+# 커밋 예정 파일 — 단계별 무작위 유전학습 0.15.0
+
+대상: `https://github.com/dbrua3311/walking-simulator.git`
+
+브랜치: `feat/walking-simulator`
+
+사용자 확인 전에는 커밋·push하지 않는다. 초기 구현·3D·20대 관찰·무작위 신경망·점프 수정과 단계별 점수/승급/다양성/보행 재검증 및 후진 누적 감점·시간 변화 입력·실패/정체 후 탐색 확대·약한 초기 균형 가중치·네 발 반복 보행 판정을 포함한 안정 재착지·실제 체중 이동 보상과 균형 보존 진화·관절 감각 연결·분포 탐색·균형 계보 보존·연속 전진 조건·실제 발 하중/접촉점 미끄러짐 측정을 포함한 아래63개 파일이다. 의존성·캐시·브라우저·실험 원본·스크린샷·빌드는 제외한다.
+
+- `.gitignore`
+- `AGENTS.md`
+- `README.md`
+- `docs/ACCEPTANCE_TESTS.md`
+- `docs/ARCHITECTURE.md`
+- `docs/COMMIT_FILES.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/PRODUCT_SPEC.md`
+- `docs/PROJECT_OVERVIEW.md`
+- `docs/STORAGE.md`
+- `docs/VALIDATION.md`
+- `docs/VALIDATION_3D.md`
+- `docs/VALIDATION_CURRICULUM.md`
+- `docs/VALIDATION_ADAPTIVE.md`
+- `docs/VALIDATION_LOCOMOTION.md`
+- `docs/VALIDATION_RANDOM.md`
+- `e2e/simulator.spec.ts`
+- `index.html`
+- `package-lock.json`
+- `package.json`
+- `playwright.config.ts`
+- `scripts/experiment.ts`
+- `scripts/upgrade-controller.ts`
+- `scripts/run.sh`
+- `src/app/App.tsx`
+- `src/components/Chart.tsx`
+- `src/components/GenomeInspector.tsx`
+- `src/components/TrainingPanel.tsx`
+- `src/controllers/genome.ts`
+- `src/controllers/neural.ts`
+- `src/controllers/shared.ts`
+- `src/genetics/evolution.ts`
+- `src/genetics/covariance.ts`
+- `src/genetics/balanceSearch.ts`
+- `src/genetics/sharedSearch.ts`
+- `src/genetics/sharedMutation.ts`
+- `src/main.tsx`
+- `src/persistence/files.ts`
+- `src/persistence/upgrade.ts`
+- `src/physics/assessment.ts`
+- `src/physics/engine.ts`
+- `src/physics/gait.ts`
+- `src/physics/math.ts`
+- `src/physics/robot.ts`
+- `src/simulation/config.ts`
+- `src/simulation/curriculum.ts`
+- `src/simulation/experiment.ts`
+- `src/simulation/types.ts`
+- `src/simulation/verification.ts`
+- `src/style.css`
+- `src/tests/assessment.test.ts`
+- `src/tests/controller.test.ts`
+- `src/tests/curriculum.test.ts`
+- `src/tests/evolution.test.ts`
+- `src/tests/persistence.test.ts`
+- `src/tests/physics.test.ts`
+- `src/tests/setup.ts`
+- `src/tests/search.test.ts`
+- `src/tests/shared.test.ts`
+- `src/visualization/Scene.tsx`
+- `src/workers/simulation.worker.ts`
+- `tsconfig.json`
+- `vite.config.ts`
